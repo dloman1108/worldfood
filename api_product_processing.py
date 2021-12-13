@@ -38,6 +38,14 @@ def get_engine():
         
     
 
+#Function to process a single page of products and store results into 7 tables:
+#1. Products - table of all products
+#2. Ingredients - maps products to ingredients
+#3. Allergens - maps products to allergens
+#4. Nutrients - maps products to nutrients
+#5. Brands - maps products to brands
+#6. Categories - maps products to categories
+#7. Logging - logs pages processed, plus if any had errors
 def process_page(all_food_products,engine):
     
     products = all_food_products['products']
@@ -199,11 +207,11 @@ def process_page(all_food_products,engine):
                                 'error_processing': sa.types.BOOLEAN()})
 
 
-
+#Function to process all product pages (24 products per page)
 def process_all_pages(engine,page_num):
     all_food_products = requests.get('https://us.openfoodfacts.org/.json?page=1').json()
-    #num_pages = int(np.ceil(all_food_products['count']/24.))
-    num_pages=2000
+    num_pages = int(np.ceil(all_food_products['count']/24.))
+    #num_pages=
     cnt=1
     for page in range(page_num,num_pages+1):
         all_food_products = requests.get('https://us.openfoodfacts.org/.json?page={}'.format(str(page))).json()
@@ -240,23 +248,10 @@ def process_all_pages(engine,page_num):
 
 def main():
     engine=get_engine()
-    page_num=1801
+    page_num=1 #Page to start processing at
     process_all_pages(engine,page_num)
         
     
     
 if __name__ == "__main__":
     main()     
-
-
-
-'''
-
-Google: what is architecture diagram? what is stream and batch processing pipeline?
-
-'''
-
-
-
-'28400589864'
-
