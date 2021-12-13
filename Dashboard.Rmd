@@ -1,0 +1,297 @@
+---
+title: "Open Food Facts Dashboard"
+output:
+  flexdashboard::flex_dashboard:
+      logo: nuvalence_logo.png
+      css: "styles.css"
+  
+runtime: shiny
+---
+
+
+
+```{r}
+library(RPostgreSQL)
+library(DBI)
+library(yaml)
+library(dplyr)
+library(DT)
+library(plotly)
+library(scales)
+
+
+
+creds <- read_yaml('secrets.yaml')
+con <- dbConnect(RPostgres::Postgres(),
+                 host = creds$EDW$endpoint,
+                 dbname = creds$EDW$database,
+                 user = creds$EDW$user,
+                 password = creds$EDW$password,
+                 port = creds$EDW$port)
+```
+
+
+Page 1
+=====================================  
+
+Row
+-------------------------------------
+    
+### Most common allergens in food products
+    
+```{r}
+qry = 'select * from worldfood.allergens_agg'
+
+allergens_df <- data.frame(
+    con %>%
+      tbl(sql(qry)) %>%
+      mutate(pct_products = round(pct_products,4)) %>%
+      select(allergen_name,num_products,pct_products) %>%
+      arrange(-num_products) %>%
+      head(20)
+)
+
+allergens_df <- allergens_df %>% mutate(pct_products = percent(pct_products))
+names(allergens_df) <- c('Allergen','# Products','% Products')
+
+datatable(allergens_df)
+```
+ 
+### Food products with low carbs, high protein
+    
+```{r}
+qry <- 'select * from worldfood.nutrients_agg'
+
+nutrients1_df <- data.frame(
+    con %>%
+      tbl(sql(qry)) %>%
+      filter(carbs_per_serving_indicator == 'low',
+             protein_per_serving_indicator == 'high') %>%
+      select(product_name,carbs_per_serving,protein_per_serving)
+)
+names(nutrients1_df) <- c('Product','Carbs per Serving (g)','Protein per Serving (g)')
+
+datatable(nutrients1_df)
+``` 
+
+Row
+-------------------------------------
+    
+### Most commonly used ingredients in food products
+    
+```{r}
+qry <- 'select * from worldfood.ingredients_agg'
+ingredients_df <- data.frame(
+    con %>%
+      tbl(sql(qry)) %>%
+      mutate(pct_products = round(pct_products,4)) %>%
+      select(ingredient_name,num_products,pct_products) %>%
+      arrange(-num_products) %>%
+      head(20)
+)
+ingredients_df <- ingredients_df %>% mutate(pct_products = percent(pct_products))
+names(ingredients_df) <- c('Ingredient','# Products','% Products')
+datatable(ingredients_df)
+```
+    
+### Food products with low calories, high protein
+
+```{r}
+qry <- 'select * from worldfood.nutrients_agg'
+
+nutrients2_df <- data.frame(
+    con %>%
+      tbl(sql(qry)) %>%
+      filter(calories_per_serving_indicator == 'low',
+             protein_per_serving_indicator == 'high') %>%
+      select(product_name,calories_per_serving,protein_per_serving)
+)
+names(nutrients2_df) <- c('Product','Calories per Serving','Protein per Serving (g)')
+
+datatable(nutrients2_df)
+```
+
+Page 2 {data-orientation=rows}
+=====================================     
+   
+Inputs {.sidebar}
+-------------------------------------
+
+```{r, out.width = "230px"}
+
+tags$br()
+
+qry_allerg <- 'select allergen_name from worldfood.allergens_reference'
+qry_categories <- 'select category_name from worldfood.categories_reference where products > 4000'
+qry_brands <- 'select brand_name from worldfood.brands_reference where products > 500'
+
+allergens <- 
+    con %>%
+      tbl(sql(qry_allerg)) %>%
+      select(allergen_name) %>%
+      collect()
+
+categories <-
+    con %>%
+      tbl(sql(qry_categories)) %>%
+      select(category_name) %>%
+      collect()
+
+brands <-
+    con %>%
+      tbl(sql(qry_brands)) %>%
+      select(brand_name) %>%
+      collect()
+
+
+selectInput(inputId  = "allergen", # Filter Key
+            label    = "Allergen", # UI Label
+            choices  = allergens, # Value Selections 
+            )
+
+selectInput(inputId  = "category", # Filter Key
+            label    = "Category", # UI Label
+            choices  = c('All',sort(unique(categories$category_name))),
+            selected = 'All')
+
+selectInput(inputId  = "brand", # Filter Key
+            label    = "Brand", # UI Label
+            choices  = c('All',sort(unique(brands$brand_name))),
+            selected = 'All')
+
+tags$br()
+tags$br()
+tags$br()
+tags$br()
+tags$br()
+tags$br()
+tags$br()
+tags$br()
+tags$br()
+tags$br()
+tags$br()
+
+knitr::include_graphics("nuvalence_logo.png")
+
+```
+ 
+Column
+-------------------------------------
+    
+### List of proucts with selected allergen
+    
+```{r}
+renderDataTable({
+    qry = '
+    select
+    	p.product_name
+    	,ar.allergen_name
+    	,cr.category_name
+    	,br.brand_name
+    from
+    	worldfood.products p 
+    join
+    	worldfood.product_allergens pa 
+    	on p.product_id=pa.product_id
+    join
+        worldfood.allergens_reference ar 
+        on pa.allergen_id=ar.allergen_id
+    join 
+    	worldfood.product_categories pc
+    	on p.product_id=pc.product_id
+    join
+        worldfood.categories_reference cr 
+        on pc.category_id=cr.category_id
+    join
+    	worldfood.product_brands pb
+    	on p.product_id=pb.product_id
+    join
+        worldfood.brands_reference br
+        on pb.brand_id=br.brand_id
+    '
+    
+    tbl <- data.frame(
+        con %>%
+          tbl(sql(qry)) %>%
+          filter(allergen_name == !!input$allergen) %>%
+          select(product_name, allergen_name, category_name, brand_name) 
+    )
+    
+    if(input$brand != 'All'){
+        tbl <- tbl %>% filter(brand_name == !!input$brand)
+    }
+    
+    if(input$category != 'All'){
+        tbl <- tbl %>% filter(category_name == !!input$category)
+    }
+    
+    names(tbl) <- c('Product','Allergen','Category','Brand')
+    datatable(tbl,fillContainer = TRUE)
+    
+})
+
+
+```
+    
+### Most common ingredients in foods with selected allergen
+
+```{r}
+renderPlotly({
+    qry = '
+    select
+        p.product_id
+    	,pi.ingredient_name
+    	,ar.allergen_name
+    	,cr.category_name
+    	,br.brand_name
+    from
+    	worldfood.products p 
+    join
+    	worldfood.product_allergens pa 
+    	on p.product_id=pa.product_id
+    join
+        worldfood.allergens_reference ar 
+        on pa.allergen_id=ar.allergen_id
+    join 
+    	worldfood.product_categories pc
+    	on p.product_id=pc.product_id
+    join
+        worldfood.categories_reference cr 
+        on pc.category_id=cr.category_id
+    join
+    	worldfood.product_brands pb
+    	on p.product_id=pb.product_id
+    join
+        worldfood.brands_reference br
+        on pb.brand_id=br.brand_id
+    join
+        worldfood.product_ingredients pi
+        on p.product_id=pi.product_id
+    '
+    
+    tbl <- data.frame(
+        con %>%
+          tbl(sql(qry)) %>%
+          filter(allergen_name == !!input$allergen) %>%
+          select(product_id, ingredient_name, allergen_name, category_name, brand_name) 
+    )
+    
+    if(input$brand != 'All'){
+        tbl <- tbl %>% filter(brand_name == !!input$brand)
+    }
+    
+    if(input$category != 'All'){
+        tbl <- tbl %>% filter(category_name == !!input$category)
+    }
+    
+    tbl %>%
+        group_by(ingredient_name) %>% 
+        summarise(n=n_distinct(product_id)) %>% 
+        arrange(desc(n)) %>%
+        head(10) %>% 
+        plot_ly(x=~reorder(ingredient_name,desc(n)),y=~n,type="bar",color=I("#e85c31")) %>%
+        layout(hovermode = 'x',xaxis=list(title='Ingredient'),yaxis=list(title='# Products')) 
+
+    
+})
+```

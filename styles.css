@@ -1,0 +1,27 @@
+.nav-tabs-custom .nav-tabs > li.active > a:hover {
+  color: purple;
+}
+.navbar {
+  background-color:#e85c31;
+  border-color:white;
+  hover-color:black;
+}
+.section.sidebar {
+  background-color:#e85c31;
+  border-color:black;
+  color:white
+}
+.navbar-brand {
+color:white!important;
+hover-color:black;
+}
+.navbar-nav li a:hover, .navbar-nav > .active > a {
+  color: white !important;
+  background-color: black !important;
+  background-image: none !important;
+}
+.navbar-logo img {
+    position: absolute;
+    right: 0px;
+    width: 45px;
+}
